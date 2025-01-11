@@ -7,6 +7,7 @@ import { useMemo } from 'react'
 import { Candidate } from '../../api'
 import CandidateCard from '../../components/Candidate'
 import { Badge } from '@welcome-ui/badge'
+import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd'
 
 type Statuses = 'new' | 'interview' | 'hired' | 'rejected'
 const COLUMNS: Statuses[] = ['new', 'interview', 'hired', 'rejected']
@@ -32,6 +33,20 @@ function JobShow() {
     }, {})
   }, [candidates])
 
+  const handleDraggedCandidate = (result: DropResult) => {
+    const { source, destination } = result
+
+    if (!destination) return
+
+    const isSameLocation =
+      source.droppableId === destination.droppableId && source.index === destination.index
+
+    if (!isSameLocation) {
+      // Implement backend changes
+      console.log('update db')
+    }
+  }
+
   return (
     <>
       <Box backgroundColor="neutral-70" p={20} alignItems="center">
@@ -40,38 +55,55 @@ function JobShow() {
         </Text>
       </Box>
 
-      <Box p={20}>
-        <Flex gap={10}>
-          {COLUMNS.map(column => (
-            <Box
-              w={300}
-              border={1}
-              backgroundColor="white"
-              borderColor="neutral-30"
-              borderRadius="md"
-              overflow="hidden"
-            >
-              <Flex
-                p={10}
-                borderBottom={1}
+      <DragDropContext onDragEnd={handleDraggedCandidate}>
+        <Box p={20}>
+          <Flex gap={10}>
+            {COLUMNS.map(column => (
+              <Box
+                key={column}
+                w={300}
+                border={1}
+                backgroundColor="white"
                 borderColor="neutral-30"
-                alignItems="center"
-                justify="space-between"
+                borderRadius="md"
+                overflow="hidden"
               >
-                <Text color="black" m={0} textTransform="capitalize">
-                  {column}
-                </Text>
-                <Badge>{(sortedCandidates[column] || []).length}</Badge>
-              </Flex>
-              <Flex direction="column" p={10} pb={0}>
-                {sortedCandidates[column]?.map((candidate: Candidate) => (
-                  <CandidateCard candidate={candidate} />
-                ))}
-              </Flex>
-            </Box>
-          ))}
-        </Flex>
-      </Box>
+                <Flex
+                  p={10}
+                  borderBottom={1}
+                  borderColor="neutral-30"
+                  alignItems="center"
+                  justify="space-between"
+                >
+                  <Text color="black" m={0} textTransform="capitalize">
+                    {column}
+                  </Text>
+                  <Badge>{(sortedCandidates[column] || []).length}</Badge>
+                </Flex>
+                <Droppable key={column} droppableId={column}>
+                  {(
+                    provided
+                    // once functional we can use second provided argument snapshot to update style when dragging
+                  ) => (
+                    <Flex
+                      direction="column"
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      p={10}
+                      pb={0}
+                    >
+                      {sortedCandidates[column]?.map((candidate, index) => (
+                        <CandidateCard index={index} key={candidate.id} candidate={candidate} />
+                      ))}
+                      {provided.placeholder}
+                    </Flex>
+                  )}
+                </Droppable>
+              </Box>
+            ))}
+          </Flex>
+        </Box>
+      </DragDropContext>
     </>
   )
 }
