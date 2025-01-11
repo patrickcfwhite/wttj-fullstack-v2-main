@@ -11,6 +11,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "^17.0.0",
     "@welcome-ui/badge": "^6.0.0",
     "@welcome-ui/box": "^6.0.0",
     "@welcome-ui/card": "^6.0.0",
