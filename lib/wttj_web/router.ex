@@ -26,7 +26,7 @@ defmodule WttjWeb.Router do
   scope "/", WttjWeb do
     pipe_through :browser
 
-    get "/*path", PageController, :home
+    get "/", PageController, :home
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
