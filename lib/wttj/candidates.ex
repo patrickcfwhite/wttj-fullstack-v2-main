@@ -71,29 +71,43 @@ defmodule Wttj.Candidates do
   def update_candidate(%Candidate{} = candidate, attrs) do
     candidate_changeset = change_candidate(candidate, attrs)
 
+    # Exit early if the changeset is invalid
+    if not candidate_changeset.valid? do
+      {:error, candidate_changeset}
+    end
+
     if candidate_changeset.changes == %{} do
-      # No changes, return the existing candidate as is
       {:ok, candidate}
-    else
-      status_changed = Ecto.Changeset.changed?(candidate_changeset, :status)
-      position_changed = Ecto.Changeset.changed?(candidate_changeset, :position)
+    end
 
-      if status_changed or position_changed do
-        # Ensure position and status are included in the changeset, even if they haven't changed
-        candidate_changeset =
-          if position_changed == true,
-            do: candidate_changeset,
-            else: Ecto.Changeset.force_change(candidate_changeset, :position, candidate.position)
+    status_changed = Ecto.Changeset.changed?(candidate_changeset, :status)
+    position_changed = Ecto.Changeset.changed?(candidate_changeset, :position)
 
-        candidate_changeset =
-          if status_changed == true,
-            do: candidate_changeset,
-            else: Ecto.Changeset.force_change(candidate_changeset, :status, candidate.status)
-
-        reorder_candidates(candidate, candidate_changeset, status_changed)
+    # Ensure position and status are included in the changeset if they haven't changed
+    candidate_changeset =
+      if not position_changed do
+        Ecto.Changeset.force_change(candidate_changeset, :position, candidate.position)
       else
-        Repo.update!(candidate_changeset)
+        candidate_changeset
       end
+
+    candidate_changeset =
+      if not status_changed do
+        Ecto.Changeset.force_change(candidate_changeset, :status, candidate.status)
+      else
+        candidate_changeset
+      end
+
+    if status_changed or position_changed do
+      case reorder_candidates(candidate, candidate_changeset, status_changed) do
+        {:ok, updated_candidate} ->
+          {:ok, updated_candidate}
+
+        {:error, error_changeset} ->
+          {:error, error_changeset}
+      end
+    else
+      Repo.update(candidate_changeset)
     end
   end
 
@@ -116,37 +130,61 @@ defmodule Wttj.Candidates do
          status_changed
        ) do
     Repo.transaction(fn ->
-
       current_status_candidates =
         from(c in Candidate)
         |> where(
           [c],
-          c.job_id == ^candidate.job_id and c.status == ^candidate.status and
+          c.job_id == ^candidate.job_id and
+            c.status == ^candidate.status and
             c.id != ^candidate.id
         )
         |> order_by([c], asc: c.position)
         |> Repo.all()
-
 
       current_status = if status_changed, do: :outgoing, else: :same
 
       new_status_candidates =
         if status_changed do
           from(c in Candidate)
-          |> where([c], c.job_id == ^candidate.job_id and c.status == ^changeset.changes.status)
+          |> where(
+            [c],
+            c.job_id == ^candidate.job_id and
+              c.status == ^changeset.changes.status
+          )
           |> order_by([c], asc: c.position)
           |> Repo.all()
         else
           []
         end
 
+      normalised_position =
+        normalize_position(
+          changeset.changes.position,
+          if(current_status == :same, do: current_status_candidates, else: new_status_candidates)
+        )
+
+      final_changeset =
+        changeset
+        |> Ecto.Changeset.force_change(:position, normalised_position)
+
       updated_current_status_candidates =
-        update_candidate_positions(current_status_candidates, candidate, changeset, current_status)
+        update_candidate_positions(
+          current_status_candidates,
+          candidate,
+          final_changeset,
+          current_status
+        )
 
       updated_new_status_candidates =
-        update_candidate_positions(new_status_candidates, candidate, changeset, :incoming)
+        update_candidate_positions(new_status_candidates, candidate, final_changeset, :incoming)
 
-      Repo.update!(Ecto.Changeset.change(candidate, position: -1))
+      case Repo.update(Ecto.Changeset.change(candidate, position: -1)) do
+        {:ok, _} ->
+          :ok
+
+        {:error, changeset} ->
+          Repo.rollback({:error, changeset})
+      end
 
       Repo.insert_all(Candidate, updated_current_status_candidates,
         on_conflict: :replace_all,
@@ -158,28 +196,22 @@ defmodule Wttj.Candidates do
         conflict_target: [:id]
       )
 
-      normalised_position =
-        case current_status do
-          :same ->
-            if changeset.changes.position > length(current_status_candidates),
-              do: length(current_status_candidates),
-              else: changeset.changes.position
+      case Repo.update(final_changeset) do
+        {:ok, updated_candidate} ->
+          updated_candidate
 
-          :outgoing ->
-            if changeset.changes.position > length(new_status_candidates),
-              do: length(new_status_candidates),
-              else: changeset.changes.position
-        end
-
-      final_changeset =
-        changeset
-        |> Ecto.Changeset.change(position: normalised_position)
-
-      Repo.update!(final_changeset)
+        {:error, error_changeset} ->
+          Repo.rollback({:error, error_changeset})
+      end
     end)
   end
 
-  defp update_candidate_positions(static_candidates, %Candidate{} = changing_candidate, changeset, :same) do
+  defp update_candidate_positions(
+         static_candidates,
+         %Candidate{} = changing_candidate,
+         changeset,
+         :same
+       ) do
     updated_candidates =
       Enum.map(static_candidates, fn static_candidate ->
         cond do
@@ -237,6 +269,15 @@ defmodule Wttj.Candidates do
       end)
 
     map_from_struct(updated_candidates)
+  end
+
+  defp normalize_position(position, candidates) do
+    # Cap the position to the valid range of 0 to the length of the candidates
+    cond do
+      position < 0 -> 0
+      position > length(candidates) -> length(candidates)
+      true -> position
+    end
   end
 
   defp map_from_struct(records) do
