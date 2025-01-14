@@ -2,24 +2,38 @@ import { Card } from '@welcome-ui/card'
 import { Candidate } from '../../api'
 import { Draggable } from '@hello-pangea/dnd'
 
-function CandidateCard({ candidate, index }: { candidate: Candidate; index: number }) {
+const DraggableContainer = ({
+  index,
+  draggableId,
+  children,
+}: {
+  index: number
+  draggableId: string
+  children: React.ReactNode
+}) => {
   return (
-    <Draggable index={index} draggableId={candidate.email}>
-      {(
-        provided
-        // once functional we can use second provided argument snapshot to update style when dragging
-      ) => (
-        <Card
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          {...provided.dragHandleProps}
-          mb={10}
-        >
-          <Card.Body>{candidate.email}</Card.Body>
-        </Card>
+    <Draggable index={index} draggableId={draggableId}>
+      {provided => (
+        <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}>
+          {children}
+        </div>
       )}
     </Draggable>
   )
 }
 
-export default CandidateCard
+export const CandidateCard = ({ candidate }: { candidate: Candidate }) => {
+  return (
+    <Card>
+      <Card.Body>{candidate.email}</Card.Body>
+    </Card>
+  )
+}
+
+export const DraggableCard = ({ candidate, index }: { candidate: Candidate; index: number }) => {
+  return (
+    <DraggableContainer index={index} draggableId={`${candidate.id}`}>
+      <CandidateCard candidate={candidate} />
+    </DraggableContainer>
+  )
+}
