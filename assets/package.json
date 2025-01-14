@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",
+    "@types/lodash": "^4.17.14",
     "@welcome-ui/badge": "^6.0.0",
     "@welcome-ui/box": "^6.0.0",
     "@welcome-ui/card": "^6.0.0",
@@ -21,7 +22,9 @@
     "@welcome-ui/tag": "^6.0.0",
     "@welcome-ui/text": "^6.0.0",
     "@xstyled/styled-components": "^4.0.0",
+    "lodash": "^4.17.21",
     "react": "^18.3.1",
+    "react-beautiful-dnd-test-utils": "^4.1.1",
     "react-dom": "^18.3.1",
     "react-query": "^3.39.3",
     "react-router-dom": "^6.27.0",
