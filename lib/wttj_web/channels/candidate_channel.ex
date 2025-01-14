@@ -25,6 +25,16 @@ defmodule WttjWeb.CandidateChannel do
     {:noreply, socket}
   end
 
+  def handle_in("candidate_created", %{"candidate" => candidate}, socket) do
+    broadcast!(socket, "candidate_created", %{candidate: candidate})
+    {:noreply, socket}
+  end
+
+  def handle_in("candidate_updated", %{"candidate" => candidate}, socket) do
+    broadcast!(socket, "candidate_updated", %{candidate: candidate})
+    {:noreply, socket}
+  end
+
   # Add authorization logic here as required.
   defp authorized?(_payload) do
     true
