@@ -7,6 +7,7 @@ defmodule Wttj.Candidates do
   alias Wttj.Repo
 
   alias Wttj.Candidates.Candidate
+  alias WttjWeb.Endpoint
 
   @doc """
   Returns the list of candidates.
@@ -54,6 +55,14 @@ defmodule Wttj.Candidates do
     %Candidate{}
     |> Candidate.changeset(attrs)
     |> Repo.insert()
+    |> case do
+      {:ok, candidate} ->
+        Endpoint.broadcast("candidate:#{candidate.job_id}", "candidate_created", %{candidate: candidate})
+        {:ok, candidate}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 
   @doc """
@@ -101,13 +110,21 @@ defmodule Wttj.Candidates do
     if status_changed or position_changed do
       case reorder_candidates(candidate, candidate_changeset, status_changed) do
         {:ok, updated_candidate} ->
+          Endpoint.broadcast("candidate:#{updated_candidate.job_id}", "candidate_updated", %{candidate: updated_candidate})
           {:ok, updated_candidate}
 
         {:error, error_changeset} ->
           {:error, error_changeset}
       end
     else
-      Repo.update(candidate_changeset)
+      case Repo.update(candidate_changeset) do
+        {:ok, updated_candidate} ->
+          Endpoint.broadcast("candidate:#{updated_candidate.job_id}", "candidate_updated", %{candidate: updated_candidate})
+          {:ok, updated_candidate}
+
+        {:error, error_changeset} ->
+          {:error, error_changeset}
+      end
     end
   end
 
