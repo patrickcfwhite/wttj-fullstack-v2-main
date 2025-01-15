@@ -42,7 +42,8 @@ defmodule WttjWeb.CandidateControllerTest do
       assert %{
                "id" => ^id,
                "email" => ^email,
-               "position" => 43,
+               # As this is the only candidate the position is normalised
+               "position" => 0,
                "status" => "interview"
              } = json_response(conn, 200)["data"]
     end
