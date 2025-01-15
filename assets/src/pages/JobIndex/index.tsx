@@ -12,7 +12,7 @@ function JobIndex() {
   return (
     <ul>
       {jobs?.map(job => (
-        <li>
+        <li key={job.id}>
           <Link as={RouterLink} to={`/jobs/${job.id}`}>
             {job.name}
           </Link>

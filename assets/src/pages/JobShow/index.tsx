@@ -1,36 +1,22 @@
 import { useParams } from 'react-router-dom'
-import { useJob, useCandidates } from '../../hooks'
-import { Text } from '@welcome-ui/text'
 import { Flex } from '@welcome-ui/flex'
 import { Box } from '@welcome-ui/box'
-import { useMemo } from 'react'
-import { Candidate } from '../../api'
-import CandidateCard from '../../components/Candidate'
-import { Badge } from '@welcome-ui/badge'
-
-type Statuses = 'new' | 'interview' | 'hired' | 'rejected'
-const COLUMNS: Statuses[] = ['new', 'interview', 'hired', 'rejected']
-
-interface SortedCandidates {
-  new?: Candidate[]
-  interview?: Candidate[]
-  hired?: Candidate[]
-  rejected?: Candidate[]
-}
+import { Text } from '@welcome-ui/text'
+import { DragDropContext } from '@hello-pangea/dnd'
+import { useJob, useCandidates, useDragHandlers, useSortedCandidates } from '../../hooks'
+import { KanbanColumn } from '../../components/KanbanColumn'
+import { KANBAN_STATUSES } from '../../api'
 
 function JobShow() {
   const { jobId } = useParams()
   const { job } = useJob(jobId)
   const { candidates } = useCandidates(jobId)
-
-  const sortedCandidates = useMemo(() => {
-    if (!candidates) return {}
-
-    return candidates.reduce<SortedCandidates>((acc, c: Candidate) => {
-      acc[c.status] = [...(acc[c.status] || []), c].sort((a, b) => a.position - b.position)
-      return acc
-    }, {})
-  }, [candidates])
+  const sortedCandidates = useSortedCandidates(candidates)
+  const { handleDragUpdate, handleDraggedCandidate } = useDragHandlers({
+    jobId,
+    candidates,
+    sortedCandidates,
+  })
 
   return (
     <>
@@ -40,38 +26,15 @@ function JobShow() {
         </Text>
       </Box>
 
-      <Box p={20}>
-        <Flex gap={10}>
-          {COLUMNS.map(column => (
-            <Box
-              w={300}
-              border={1}
-              backgroundColor="white"
-              borderColor="neutral-30"
-              borderRadius="md"
-              overflow="hidden"
-            >
-              <Flex
-                p={10}
-                borderBottom={1}
-                borderColor="neutral-30"
-                alignItems="center"
-                justify="space-between"
-              >
-                <Text color="black" m={0} textTransform="capitalize">
-                  {column}
-                </Text>
-                <Badge>{(sortedCandidates[column] || []).length}</Badge>
-              </Flex>
-              <Flex direction="column" p={10} pb={0}>
-                {sortedCandidates[column]?.map((candidate: Candidate) => (
-                  <CandidateCard candidate={candidate} />
-                ))}
-              </Flex>
-            </Box>
-          ))}
-        </Flex>
-      </Box>
+      <DragDropContext onDragUpdate={handleDragUpdate} onDragEnd={handleDraggedCandidate}>
+        <Box p={20}>
+          <Flex gap={10} wrap="wrap">
+            {KANBAN_STATUSES.map(column => (
+              <KanbanColumn key={column} column={column} candidates={sortedCandidates[column]} />
+            ))}
+          </Flex>
+        </Box>
+      </DragDropContext>
     </>
   )
 }
