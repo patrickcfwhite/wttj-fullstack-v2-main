@@ -24,7 +24,7 @@ const DraggableContainer = ({
 
 export const CandidateCard = ({ candidate }: { candidate: Candidate }) => {
   return (
-    <Card>
+    <Card mb={6}>
       <Card.Body>{candidate.email}</Card.Body>
     </Card>
   )
