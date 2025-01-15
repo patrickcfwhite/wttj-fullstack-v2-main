@@ -58,6 +58,7 @@ defmodule Wttj.Candidates do
 
   @doc """
   Updates a candidate.
+  If position or status is changed it will also update any affected candidates requiring reordering of their position.
 
   ## Examples
 
@@ -124,6 +125,8 @@ defmodule Wttj.Candidates do
     Candidate.changeset(candidate, attrs)
   end
 
+  # Performs update of candidate and depending on change in position/status
+  # will also perform reordering and update of any affected candidates
   defp reorder_candidates(
          %Candidate{} = candidate,
          changeset,
@@ -206,6 +209,8 @@ defmodule Wttj.Candidates do
     end)
   end
 
+  # Returns affected candidates with updated positions
+  # when candidate is only changing position but maintaining the same status
   defp update_candidate_positions(
          static_candidates,
          %Candidate{} = changing_candidate,
@@ -235,6 +240,7 @@ defmodule Wttj.Candidates do
     map_from_struct(updated_candidates)
   end
 
+  # Returns affected candidates with updated positions when candidate is changing from shared status
   defp update_candidate_positions(
          static_candidates,
          %Candidate{} = changing_candidate,
@@ -253,6 +259,7 @@ defmodule Wttj.Candidates do
     map_from_struct(updated_candidates)
   end
 
+  # Returns affected candidates with updated positions when candidate is joining shared status
   defp update_candidate_positions(
          static_candidates,
          %Candidate{} = _incoming_candidate,
@@ -271,8 +278,8 @@ defmodule Wttj.Candidates do
     map_from_struct(updated_candidates)
   end
 
+  # Cap the position to the valid range of 0 to the length of the candidates
   defp normalize_position(position, candidates) do
-    # Cap the position to the valid range of 0 to the length of the candidates
     cond do
       position < 0 -> 0
       position > length(candidates) -> length(candidates)
@@ -280,6 +287,7 @@ defmodule Wttj.Candidates do
     end
   end
 
+  # Converts a list of modified structs into a list of maps, ready for bulk insertion into the repository.
   defp map_from_struct(records) do
     records
     |> Enum.map(fn record ->
