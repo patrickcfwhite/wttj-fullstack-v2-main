@@ -1,0 +1,113 @@
+name: Elixir CI
+
+on:
+  push:
+    branches: [ "main" ]  # adapt branch for project
+  pull_request:
+    branches: [ "main" ]  # adapt branch for project
+
+env:
+  MIX_ENV: test
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    services:
+      db:
+        image: postgres:12
+        ports: ['5432:5432']
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    runs-on: ubuntu-latest
+    name: Test on OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
+    strategy:
+      matrix:
+        otp: ['27.0.1']
+        elixir: ['1.17.2']
+    steps:
+    # Step: Setup Elixir + Erlang image as the base.
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        otp-version: ${{matrix.otp}}
+        elixir-version: ${{matrix.elixir}}
+
+    # Step: Check out the code.
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # Step: Cache deps
+    - name: Cache deps
+      id: cache-deps
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-elixir-deps
+      with:
+        path: deps
+        key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-${{ env.cache-name }}-
+
+    # Step: Cache compiled build
+    - name: Cache compiled build
+      id: cache-build
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-compiled-build
+      with:
+        path: _build
+        key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-${{ env.cache-name }}-
+          ${{ runner.os }}-mix-
+
+    # Step: Install dependencies
+    - name: Install dependencies
+      run: mix deps.get
+
+    # Step: Compile the project treating warnings as errors
+    - name: Compiles without warnings
+      run: mix compile --warnings-as-errors
+
+    # Step: Check Formatting
+    - name: Check Formatting
+      run: mix format --check-formatted
+
+    # React Frontend Setup with Yarn
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 20.11.0  # Use your desired Node.js version
+
+    - name: Cache Yarn modules
+      uses: actions/cache@v3
+      with:
+        path: assets/node_modules
+        key: ${{ runner.os }}-yarn-modules-${{ hashFiles('**/assets/yarn.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-yarn-modules-
+
+    - name: Install dependencies with Yarn
+      working-directory: assets
+      run: yarn install
+
+    - name: Build React front end
+      working-directory: assets
+      run: yarn build
+
+    # Optional: Run React front end tests
+    - name: Run React front end tests
+      working-directory: assets
+      run: yarn test
+
+    # Step: Execute the tests.
+    - name: Run Elixir tests
+      run: mix test
