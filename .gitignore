@@ -35,3 +35,5 @@ wttj-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Ignore TypeScript build info files
+*.tsbuildinfo

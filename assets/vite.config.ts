@@ -10,6 +10,18 @@ export default defineConfig({
   server: {
     origin: assetsUrl,
   },
+  build: {
+    outDir: '../priv/static/assets', // Specify Phoenix static directory
+    emptyOutDir: true, // Ensure old files are cleaned
+    rollupOptions: {
+      input: './index.html', // Entry point for Vite
+      output: {
+        entryFileNames: 'index.js', // Fixed filename
+        chunkFileNames: '[name].js',
+        assetFileNames: '[name].[ext]',
+      },
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',
