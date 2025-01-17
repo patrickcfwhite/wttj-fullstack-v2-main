@@ -7,9 +7,9 @@ name: Elixir CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "patrickcfwhite-test-workflow" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "patrickcfwhite-test-workflow" ]
 
 permissions:
   contents: read
