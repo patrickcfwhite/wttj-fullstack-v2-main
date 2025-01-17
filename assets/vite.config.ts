@@ -12,7 +12,7 @@ export default defineConfig({
   },
   build: {
     outDir: '../priv/static/assets', // Specify Phoenix static directory
-    emptyOutDir: true, // Ensure old files are cleaned
+    emptyOutDir: false, // Ensure old files are cleaned
     rollupOptions: {
       input: './index.html', // Entry point for Vite
       output: {
