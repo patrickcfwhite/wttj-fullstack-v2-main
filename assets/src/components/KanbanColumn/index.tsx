@@ -40,10 +40,9 @@ export const KanbanColumn = ({ column, candidates }: KanbanColumnProps) => (
           direction="column"
           {...provided.droppableProps}
           bg={getBackgroundColor(snapshot)}
-          style={{ transition: 'background-color 200ms linear' }}
+          transition="background-color 200ms linear"
           ref={provided.innerRef}
           p={10}
-          pb={0}
           minHeight="100%"
         >
           {candidates.map((candidate, index) => (

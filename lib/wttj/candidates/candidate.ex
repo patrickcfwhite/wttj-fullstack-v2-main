@@ -2,6 +2,7 @@ defmodule Wttj.Candidates.Candidate do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @derive {Jason.Encoder, only: [:id, :position, :status, :email, :job_id]}
   schema "candidates" do
     field :position, :integer
     field :status, Ecto.Enum, values: [:new, :interview, :rejected, :hired], default: :new

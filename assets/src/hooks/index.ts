@@ -12,7 +12,9 @@ import { assertIsKanbanStatus } from '../utilities/assertIsKanbanStatus'
 import { reorderCards } from '../utilities/reorderCards'
 import _ from 'lodash'
 import { DragUpdate, DropResult } from '@hello-pangea/dnd'
-import { useMemo } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
+import { PhoenixContext } from '../providers/PhoenixWebsocketProvider'
+import { Channel } from 'phoenix'
 
 export const useJobs = () => {
   const { isLoading, error, data } = useQuery({
@@ -160,4 +162,24 @@ export const useSortedCandidates = (candidates?: Candidate[]) => {
       { new: [], rejected: [], hired: [], interview: [] }
     )
   }, [candidates])
+}
+
+export const useChannel = (channelName: string) => {
+  const [channel, setChannel] = useState<Channel>()
+  const { websocket } = useContext(PhoenixContext)
+
+  useEffect(() => {
+    if (!websocket) return
+    const phoenixChannel = websocket.channel(channelName)
+
+    phoenixChannel.join().receive('ok', () => {
+      setChannel(phoenixChannel)
+    })
+
+    return () => {
+      phoenixChannel.leave()
+    }
+  }, [])
+
+  return [channel]
 }

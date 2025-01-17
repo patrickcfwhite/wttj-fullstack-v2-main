@@ -7,6 +7,7 @@ defmodule Wttj.Candidates do
   alias Wttj.Repo
 
   alias Wttj.Candidates.Candidate
+  alias WttjWeb.Endpoint
 
   @doc """
   Returns the list of candidates.
@@ -54,6 +55,17 @@ defmodule Wttj.Candidates do
     %Candidate{}
     |> Candidate.changeset(attrs)
     |> Repo.insert()
+    |> case do
+      {:ok, candidate} ->
+        Endpoint.broadcast("candidate:#{candidate.job_id}", "candidate_created", %{
+          candidate: candidate
+        })
+
+        {:ok, candidate}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 
   @doc """
@@ -69,46 +81,53 @@ defmodule Wttj.Candidates do
       {:error, %Ecto.Changeset{}}
 
   """
-  def update_candidate(%Candidate{} = candidate, attrs) do
-    candidate_changeset = change_candidate(candidate, attrs)
+  def update_candidate(%Candidate{} = candidate, attrs, retries \\ 3) do
+    try do
+      Repo.transaction(fn ->
+        changeset = Candidate.changeset(candidate, attrs)
 
-    # Exit early if the changeset is invalid
-    if not candidate_changeset.valid? do
-      {:error, candidate_changeset}
-    end
+        if not changeset.valid? do
+          Repo.rollback(changeset)
+        end
 
-    if candidate_changeset.changes == %{} do
-      {:ok, candidate}
-    end
+        status_changed = Ecto.Changeset.changed?(changeset, :status)
+        position_changed = Ecto.Changeset.changed?(changeset, :position)
 
-    status_changed = Ecto.Changeset.changed?(candidate_changeset, :status)
-    position_changed = Ecto.Changeset.changed?(candidate_changeset, :position)
+        # Force position only if status changed but position hasn't
+        changeset =
+          if status_changed and not position_changed do
+            Ecto.Changeset.force_change(changeset, :position, candidate.position)
+          else
+            changeset
+          end
 
-    # Ensure position and status are included in the changeset if they haven't changed
-    candidate_changeset =
-      if not position_changed do
-        Ecto.Changeset.force_change(candidate_changeset, :position, candidate.position)
-      else
-        candidate_changeset
-      end
-
-    candidate_changeset =
-      if not status_changed do
-        Ecto.Changeset.force_change(candidate_changeset, :status, candidate.status)
-      else
-        candidate_changeset
-      end
-
-    if status_changed or position_changed do
-      case reorder_candidates(candidate, candidate_changeset, status_changed) do
+        if not (status_changed or position_changed) do
+          case Repo.update(changeset) do
+            {:ok, updated_candidate} -> updated_candidate
+            {:error, error_changeset} -> Repo.rollback(error_changeset)
+          end
+        else
+          reorder_candidates(candidate, changeset, status_changed)
+        end
+      end)
+      |> case do
         {:ok, updated_candidate} ->
+          Endpoint.broadcast("candidate:#{updated_candidate.job_id}", "candidate_updated", %{
+            candidate: updated_candidate
+          })
+
           {:ok, updated_candidate}
 
-        {:error, error_changeset} ->
-          {:error, error_changeset}
+        {:error, reason} ->
+          {:error, reason}
       end
-    else
-      Repo.update(candidate_changeset)
+    rescue
+      Postgrex.Error ->
+        if retries > 0 do
+          update_candidate(candidate, attrs, retries - 1)
+        else
+          {:error, "Failed to update candidate due to repeated deadlocks"}
+        end
     end
   end
 
@@ -128,85 +147,103 @@ defmodule Wttj.Candidates do
   # Performs update of candidate and depending on change in position/status
   # will also perform reordering and update of any affected candidates
   defp reorder_candidates(
-         %Candidate{} = candidate,
+         %Candidate{} = original_candidate,
          changeset,
          status_changed
        ) do
-    Repo.transaction(fn ->
-      current_status_candidates =
+    candidate =
+      from(c in Candidate, where: c.id == ^original_candidate.id)
+      |> lock("FOR UPDATE")
+      |> Repo.one!()
+
+    current_status_candidates =
+      from(c in Candidate)
+      |> where(
+        [c],
+        c.job_id == ^candidate.job_id and
+          c.status == ^candidate.status and
+          c.id != ^candidate.id
+      )
+      |> order_by([c], asc: c.position)
+      |> lock("FOR UPDATE")
+      |> Repo.all()
+
+    new_status_candidates =
+      if status_changed do
         from(c in Candidate)
         |> where(
           [c],
           c.job_id == ^candidate.job_id and
-            c.status == ^candidate.status and
+            c.status == ^changeset.changes.status and
             c.id != ^candidate.id
         )
         |> order_by([c], asc: c.position)
+        |> lock("FOR UPDATE")
         |> Repo.all()
+      else
+        []
+      end
 
-      current_status = if status_changed, do: :outgoing, else: :same
+    candidates_to_determine_normalized_position =
+      if status_changed, do: new_status_candidates, else: current_status_candidates
 
-      new_status_candidates =
-        if status_changed do
-          from(c in Candidate)
-          |> where(
-            [c],
-            c.job_id == ^candidate.job_id and
-              c.status == ^changeset.changes.status
-          )
-          |> order_by([c], asc: c.position)
-          |> Repo.all()
-        else
-          []
-        end
+    normalized_position =
+      normalize_position(changeset.changes.position, candidates_to_determine_normalized_position)
 
-      normalised_position =
-        normalize_position(
-          changeset.changes.position,
-          if(current_status == :same, do: current_status_candidates, else: new_status_candidates)
-        )
+    final_changeset =
+      changeset
+      |> Ecto.Changeset.force_change(:position, normalized_position)
 
-      final_changeset =
-        changeset
-        |> Ecto.Changeset.force_change(:position, normalised_position)
+    direction =
+      cond do
+        status_changed -> :status_changed
+        normalized_position < candidate.position -> :down
+        true -> :up
+      end
 
-      updated_current_status_candidates =
+    # Reorder candidates based on direction to handle
+    reordered_candidates_current =
+      case direction do
+        :up -> current_status_candidates
+        :down -> Enum.sort_by(current_status_candidates, & &1.position, :desc)
+        :status_changed -> current_status_candidates
+      end
+
+    reordered_candidates_new = Enum.sort_by(new_status_candidates, & &1.position, :desc)
+
+    # Temporarily set the candidate's position to -1
+    Repo.update!(Ecto.Changeset.change(candidate, position: -1))
+
+    updated_current_status_candidates =
+      update_candidate_positions(
+        reordered_candidates_current,
+        candidate,
+        final_changeset,
+        if(status_changed, do: :outgoing, else: :same)
+      )
+
+    updated_new_status_candidates =
+      if status_changed do
         update_candidate_positions(
-          current_status_candidates,
+          reordered_candidates_new,
           candidate,
           final_changeset,
-          current_status
+          :incoming
         )
-
-      updated_new_status_candidates =
-        update_candidate_positions(new_status_candidates, candidate, final_changeset, :incoming)
-
-      case Repo.update(Ecto.Changeset.change(candidate, position: -1)) do
-        {:ok, _} ->
-          :ok
-
-        {:error, changeset} ->
-          Repo.rollback({:error, changeset})
+      else
+        []
       end
 
-      Repo.insert_all(Candidate, updated_current_status_candidates,
-        on_conflict: :replace_all,
-        conflict_target: [:id]
-      )
+    bulk_update_candidates(updated_current_status_candidates)
+    bulk_update_candidates(updated_new_status_candidates)
 
-      Repo.insert_all(Candidate, updated_new_status_candidates,
-        on_conflict: :replace_all,
-        conflict_target: [:id]
-      )
+    case Repo.update(final_changeset) do
+      {:ok, updated_candidate} ->
+        updated_candidate
 
-      case Repo.update(final_changeset) do
-        {:ok, updated_candidate} ->
-          updated_candidate
-
-        {:error, error_changeset} ->
-          Repo.rollback({:error, error_changeset})
-      end
-    end)
+      {:error, error_changeset} ->
+        Repo.rollback(error_changeset)
+    end
   end
 
   # Returns affected candidates with updated positions
@@ -287,12 +324,35 @@ defmodule Wttj.Candidates do
     end
   end
 
-  # Converts a list of modified structs into a list of maps, ready for bulk insertion into the repository.
+  # Converts a list of modified structs into a list of maps, ready for bulk insertion into the repository
   defp map_from_struct(records) do
     records
     |> Enum.map(fn record ->
       Map.from_struct(record)
       |> Map.drop([:__meta__])
     end)
+  end
+
+  # Helper function to bulk insert candidates into the repository
+  defp bulk_update_candidates(candidates) do
+    if candidates != [] do
+      case Repo.insert_all(Candidate, candidates,
+             on_conflict: :replace_all,
+             conflict_target: [:id]
+           ) do
+        {count, _} when count > 0 ->
+          :ok
+
+        {0, _} ->
+          Repo.rollback("No rows were updated. Unexpected result in bulk update.")
+
+        unexpected_response ->
+          Repo.rollback(
+            "Unexpected response from Repo.insert_all: #{inspect(unexpected_response)}"
+          )
+      end
+    else
+      :ok
+    end
   end
 end

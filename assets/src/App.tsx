@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import JobIndex from './pages/JobIndex'
 import Layout from './components/Layout'
 import JobShow from './pages/JobShow'
+import { PhoenixProvider } from './providers/PhoenixWebsocketProvider'
 
 const theme = createTheme()
 
@@ -20,7 +21,9 @@ const router = createBrowserRouter([
 function App() {
   return (
     <WuiProvider theme={theme}>
-      <RouterProvider router={router} />
+      <PhoenixProvider>
+        <RouterProvider router={router} />
+      </PhoenixProvider>
     </WuiProvider>
   )
 }
