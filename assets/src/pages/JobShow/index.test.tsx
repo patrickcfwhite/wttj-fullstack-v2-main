@@ -1,15 +1,26 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { vi, describe, test, expect, beforeEach } from 'vitest'
 import JobShow from '.'
-import { useCandidates, useJob, useUpdateCandidates } from '../../hooks'
+import { useCandidates, useJob, useUpdateCandidates, useChannel } from '../../hooks'
 import { QueryClient, QueryClientProvider } from 'react-query'
 import { Candidate } from '../../api'
+import { Channel } from 'phoenix'
 
-vi.mock('../../hooks', () => ({
-  useCandidates: vi.fn(),
-  useJob: vi.fn(),
-  useUpdateCandidates: vi.fn(),
-}))
+vi.mock('../../hooks', async importOriginal => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useCandidates: vi.fn(),
+    useJob: vi.fn(),
+    useUpdateCandidates: vi.fn(),
+    useChannel: vi.fn(),
+  }
+})
+
+const mockDataTransfer = {
+  setData: vi.fn(),
+  getData: vi.fn(() => '1'), // Mock dragging candidate with id 1
+}
 
 describe('JobShow', () => {
   const queryClient = new QueryClient()
@@ -32,6 +43,7 @@ describe('JobShow', () => {
         { id: 3, email: 'candidate3@job.co', status: 'new', position: 2 },
       ],
     })
+    vi.mocked(useChannel).mockReturnValue([{} as unknown as Channel])
     vi.mocked(useUpdateCandidates).mockReturnValue({
       updateCandidate: mockUpdateCandidates,
       data: {} as unknown as Candidate,
@@ -66,10 +78,10 @@ describe('JobShow', () => {
     const draggableItem = screen.getByText('candidate1@job.co').closest('[data-rfd-draggable-id]')!
     const droppableArea = screen.getByText('interview')
 
-    fireEvent.dragStart(draggableItem)
+    fireEvent.dragStart(draggableItem, { dataTransfer: mockDataTransfer })
     fireEvent.dragEnter(droppableArea)
-    fireEvent.dragOver(droppableArea)
-    fireEvent.drop(droppableArea)
+    fireEvent.dragOver(droppableArea, { dataTransfer: mockDataTransfer })
+    fireEvent.drop(droppableArea, { dataTransfer: mockDataTransfer })
     fireEvent.dragEnd(draggableItem)
 
     // Verify the query cache was updated
