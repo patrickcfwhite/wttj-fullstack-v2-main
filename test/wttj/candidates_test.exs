@@ -80,7 +80,8 @@ defmodule Wttj.CandidatesTest do
       candidate_two = candidate_fixture(%{job_id: job1.id, status: :new, position: 1})
       candidate_three = candidate_fixture(%{job_id: job1.id, status: :new, position: 2})
 
-      assert {:ok, _updated_candidate} = Candidates.update_candidate(candidate_one, %{position: 2})
+      assert {:ok, _updated_candidate} =
+               Candidates.update_candidate(candidate_one, %{position: 2})
 
       updated_candidates = job1.id |> Candidates.list_candidates() |> Enum.sort_by(& &1.position)
 
@@ -94,7 +95,8 @@ defmodule Wttj.CandidatesTest do
       candidate_two = candidate_fixture(%{job_id: job1.id, status: :new, position: 1})
       candidate_three = candidate_fixture(%{job_id: job1.id, status: :new, position: 2})
 
-      assert {:ok, _updated_candidate} = Candidates.update_candidate(candidate_one, %{position: 1})
+      assert {:ok, _updated_candidate} =
+               Candidates.update_candidate(candidate_one, %{position: 1})
 
       updated_candidates = job1.id |> Candidates.list_candidates() |> Enum.sort_by(& &1.position)
 
@@ -144,25 +146,35 @@ defmodule Wttj.CandidatesTest do
     test "handles concurrent updates to candidates" do
       job = job_fixture()
 
-      candidates = Enum.map(0..9, fn i ->
-        candidate_fixture(%{job_id: job.id, status: :new, position: i})
-      end)
+      candidates =
+        Enum.map(0..9, fn i ->
+          candidate_fixture(%{job_id: job.id, status: :new, position: i})
+        end)
 
       # Simulate concurrent updates
-      updates = Enum.map(candidates, fn candidate ->
-        %{candidate_id: candidate.id, new_position: :rand.uniform(10) - 1}
-      end)
+      updates =
+        Enum.map(candidates, fn candidate ->
+          %{candidate_id: candidate.id, new_position: :rand.uniform(10) - 1}
+        end)
 
       # Run updates concurrently
       results =
-        Task.async_stream(updates, fn %{candidate_id: id, new_position: pos} ->
-          candidate = Candidates.get_candidate!(job.id, id)
-          Candidates.update_candidate(candidate, %{position: pos})
-        end, max_concurrency: 5, timeout: :infinity)
+        Task.async_stream(
+          updates,
+          fn %{candidate_id: id, new_position: pos} ->
+            candidate = Candidates.get_candidate!(job.id, id)
+            Candidates.update_candidate(candidate, %{position: pos})
+          end,
+          max_concurrency: 5,
+          timeout: :infinity
+        )
         |> Enum.to_list()
 
       # Assert that all updates succeeded
-      assert Enum.all?(results, fn {:ok, {:ok, _}} -> true; _ -> false end)
+      assert Enum.all?(results, fn
+               {:ok, {:ok, _}} -> true
+               _ -> false
+             end)
 
       # Fetch updated candidates
       updated_candidates = Candidates.list_candidates(job.id) |> Enum.sort_by(& &1.position)

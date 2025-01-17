@@ -151,7 +151,6 @@ defmodule Wttj.Candidates do
          changeset,
          status_changed
        ) do
-
     candidate =
       from(c in Candidate, where: c.id == ^original_candidate.id)
       |> lock("FOR UPDATE")

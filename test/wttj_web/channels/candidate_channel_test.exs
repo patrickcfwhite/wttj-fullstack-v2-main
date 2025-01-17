@@ -41,5 +41,4 @@ defmodule WttjWeb.CandidateChannelTest do
 
     assert_broadcast("candidate_updated", %{candidate: %{"id" => 1, "name" => "John Doe"}})
   end
-
 end
