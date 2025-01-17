@@ -15,38 +15,35 @@ export const KANBAN_STATUSES = ['new', 'interview', 'hired', 'rejected'] as cons
 export type KanbanStatus = (typeof KANBAN_STATUSES)[number]
 
 export const getJobs = async (): Promise<Job[]> => {
-  const response = await fetch(`http://localhost:4000/api/jobs`)
+  const response = await fetch(`/api/jobs`)
   const { data } = await response.json()
   return data
 }
 
 export const getJob = async (jobId?: string): Promise<Job | null> => {
   if (!jobId) return null
-  const response = await fetch(`http://localhost:4000/api/jobs/${jobId}`)
+  const response = await fetch(`/api/jobs/${jobId}`)
   const { data } = await response.json()
   return data
 }
 
 export const getCandidates = async (jobId?: string): Promise<Candidate[]> => {
   if (!jobId) return []
-  const response = await fetch(`http://localhost:4000/api/jobs/${jobId}/candidates`)
+  const response = await fetch(`/api/jobs/${jobId}/candidates`)
   const { data } = await response.json()
   return data
 }
 
 export const updateCandidate = async (jobId: string, candidate: Candidate): Promise<Candidate> => {
-  const response = await fetch(
-    `http://localhost:4000/api/jobs/${jobId}/candidates/${candidate.id}`,
-    {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        candidate,
-      }),
-    }
-  )
+  const response = await fetch(`/api/jobs/${jobId}/candidates/${candidate.id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      candidate,
+    }),
+  })
 
   const { data } = await response.json()
 
