@@ -2,9 +2,9 @@ name: Elixir CI
 
 on:
   push:
-    branches: [ "patrickcfwhite-test-workflow" ]  # adapt branch for project
+    branches: [ "main" ]  # adapt branch for project
   pull_request:
-    branches: [ "patrickcfwhite-test-workflow" ]  # adapt branch for project
+    branches: [ "main" ]  # adapt branch for project
 
 env:
   MIX_ENV: test
