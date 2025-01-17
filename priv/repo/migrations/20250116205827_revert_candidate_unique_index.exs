@@ -1,4 +1,4 @@
-defmodule Wttj.Repo.Migrations.UpdateCandidateUniqueIndex do
+defmodule Wttj.Repo.Migrations.RevertCandidateUniqueIndex do
   use Ecto.Migration
 
   def change do
