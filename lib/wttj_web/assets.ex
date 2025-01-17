@@ -4,7 +4,7 @@ defmodule WttjWeb.Assets do
   if Mix.env() == :prod do
     def get(assigns) do
       ~H"""
-      <script type="module" src={WttjWeb.Router.Helpers.static_path(@conn, "/js/assets/index.js")}>
+      <script type="module" src={~p"/js/assets/index.js"}>
       </script>
       """
     end
