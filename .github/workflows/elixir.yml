@@ -1,16 +1,11 @@
 name: Elixir CI
 
-# Define workflow that runs when changes are pushed to the
-# `main` branch or pushed to a PR branch that targets the `main`
-# branch. Change the branch name if your project uses a
-# different name for the main branch like "master" or "production".
 on:
   push:
     branches: [ "patrickcfwhite-test-workflow" ]  # adapt branch for project
   pull_request:
     branches: [ "patrickcfwhite-test-workflow" ]  # adapt branch for project
 
-# Sets the ENV `MIX_ENV` to `test` for running tests
 env:
   MIX_ENV: test
 
@@ -19,9 +14,6 @@ permissions:
 
 jobs:
   test:
-    # Set up a Postgres DB service. By default, Phoenix applications
-    # use Postgres. This creates a database for running tests.
-    # Additional services can be defined here if required.
     services:
       db:
         image: postgres:12
@@ -37,11 +29,9 @@ jobs:
     runs-on: ubuntu-latest
     name: Test on OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
     strategy:
-      # Specify the OTP and Elixir versions to use when building
-      # and running the workflow steps.
       matrix:
-        otp: ['27.0.1']       # Define the OTP version [required]
-        elixir: ['1.17.2']    # Define the elixir version [required]
+        otp: ['27.0.1']
+        elixir: ['1.17.2']
     steps:
     # Step: Setup Elixir + Erlang image as the base.
     - name: Set up Elixir
@@ -54,7 +44,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Step: Define how to cache deps. Restores existing cache if present.
+    # Step: Cache deps
     - name: Cache deps
       id: cache-deps
       uses: actions/cache@v3
@@ -66,9 +56,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-mix-${{ env.cache-name }}-
 
-    # Step: Define how to cache the `_build` directory. After the first run,
-    # this speeds up tests runs a lot. This includes not re-compiling our
-    # project's downloaded deps every run.
+    # Step: Cache compiled build
     - name: Cache compiled build
       id: cache-build
       uses: actions/cache@v3
@@ -81,22 +69,45 @@ jobs:
           ${{ runner.os }}-mix-${{ env.cache-name }}-
           ${{ runner.os }}-mix-
 
-    # Step: Download project dependencies. If unchanged, uses
-    # the cached version.
+    # Step: Install dependencies
     - name: Install dependencies
       run: mix deps.get
 
-    # Step: Compile the project treating any warnings as errors.
-    # Customize this step if a different behavior is desired.
+    # Step: Compile the project treating warnings as errors
     - name: Compiles without warnings
       run: mix compile --warnings-as-errors
 
-    # Step: Check that the checked in code has already been formatted.
-    # This step fails if something was found unformatted.
-    # Customize this step as desired.
+    # Step: Check Formatting
     - name: Check Formatting
       run: mix format --check-formatted
 
+    # React Frontend Setup with Yarn
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 20.11.0  # Use your desired Node.js version
+
+    - name: Cache Yarn modules
+      uses: actions/cache@v3
+      with:
+        path: assets/node_modules
+        key: ${{ runner.os }}-yarn-modules-${{ hashFiles('**/assets/yarn.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-yarn-modules-
+
+    - name: Install dependencies with Yarn
+      working-directory: assets
+      run: yarn install
+
+    - name: Build React front end
+      working-directory: assets
+      run: yarn build
+
+    # Optional: Run React front end tests
+    - name: Run React front end tests
+      working-directory: assets
+      run: yarn test
+
     # Step: Execute the tests.
-    - name: Run tests
+    - name: Run Elixir tests
       run: mix test
